@@ -9,7 +9,7 @@ import (
 
 // Backend interface provides the common API services.
 type Backend interface {
-	// General Penta API
+	// General API
 	IsRunning() bool
 	StartWS(c *conf.Config, apis []types.API) error
 	StopWS()
