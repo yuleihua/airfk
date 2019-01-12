@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"airman.com/airfk/node/common"
+	"airman.com/airfk/node/conf"
 	"airman.com/airfk/pkg/types"
 )
 
@@ -31,7 +33,7 @@ func (s *NoopService) APIs() []types.API { return nil }
 func (s *NoopService) Start() error      { return nil }
 func (s *NoopService) Stop() error       { return nil }
 
-func NewNoopService(*ServiceContext) (Service, error) { return new(NoopService), nil }
+func NewNoopService(*ServiceContext) (common.Service, error) { return new(NoopService), nil }
 
 // Set of services all wrapping the base NoopService resulting in the same method
 // signatures but different outer types.
@@ -39,9 +41,9 @@ type NoopServiceA struct{ NoopService }
 type NoopServiceB struct{ NoopService }
 type NoopServiceC struct{ NoopService }
 
-func NewNoopServiceA(*ServiceContext) (Service, error) { return new(NoopServiceA), nil }
-func NewNoopServiceB(*ServiceContext) (Service, error) { return new(NoopServiceB), nil }
-func NewNoopServiceC(*ServiceContext) (Service, error) { return new(NoopServiceC), nil }
+func NewNoopServiceA(*ServiceContext) (common.Service, error) { return new(NoopServiceA), nil }
+func NewNoopServiceB(*ServiceContext) (common.Service, error) { return new(NoopServiceB), nil }
+func NewNoopServiceC(*ServiceContext) (common.Service, error) { return new(NoopServiceC), nil }
 
 // InstrumentedService is an implementation of Service for which all interface
 // methods can be instrumented both return value as well as event hook wise.
@@ -55,7 +57,9 @@ type InstrumentedService struct {
 	stopHook      func()
 }
 
-func NewInstrumentedService(*ServiceContext) (Service, error) { return new(InstrumentedService), nil }
+func NewInstrumentedService(*ServiceContext) (common.Service, error) {
+	return new(InstrumentedService), nil
+}
 
 func (s *InstrumentedService) APIs() []types.API {
 	return s.apis
@@ -80,7 +84,7 @@ func (s *InstrumentedService) Stop() error {
 type InstrumentingWrapper func(base ServiceConstructor) ServiceConstructor
 
 func InstrumentingWrapperMaker(base ServiceConstructor, kind reflect.Type) ServiceConstructor {
-	return func(ctx *ServiceContext) (Service, error) {
+	return func(ctx *ServiceContext) (common.Service, error) {
 		obj, err := base(ctx)
 		if err != nil {
 			return nil, err
@@ -88,7 +92,7 @@ func InstrumentingWrapperMaker(base ServiceConstructor, kind reflect.Type) Servi
 		wrapper := reflect.New(kind)
 		wrapper.Elem().Field(0).Set(reflect.ValueOf(obj).Elem())
 
-		return wrapper.Interface().(Service), nil
+		return wrapper.Interface().(common.Service), nil
 	}
 }
 
@@ -123,7 +127,7 @@ func (api *OneMethodAPI) TheOneMethod() {
 
 // Tests that an empty protocol stack can be started, restarted and stopped.
 func TestNodeLifeCycle(t *testing.T) {
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -157,7 +161,7 @@ func TestNodeLifeCycle(t *testing.T) {
 
 // Tests whether services can be registered and duplicates caught.
 func TestServiceRegistry(t *testing.T) {
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -187,7 +191,7 @@ func TestServiceRegistry(t *testing.T) {
 
 // Tests that registered services get started and stopped correctly.
 func TestServiceLifeCycle(t *testing.T) {
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -202,7 +206,7 @@ func TestServiceLifeCycle(t *testing.T) {
 
 	for id, maker := range services {
 		id := id // Closure for the constructor
-		constructor := func(*ServiceContext) (Service, error) {
+		constructor := func(*ServiceContext) (common.Service, error) {
 			return &InstrumentedService{
 				startHook: func() { started[id] = true },
 				stopHook:  func() { stopped[id] = true },
@@ -237,7 +241,7 @@ func TestServiceLifeCycle(t *testing.T) {
 
 // Tests that services are restarted cleanly as new instances.
 func TestServiceRestarts(t *testing.T) {
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -246,7 +250,7 @@ func TestServiceRestarts(t *testing.T) {
 		running bool
 		started int
 	)
-	constructor := func(*ServiceContext) (Service, error) {
+	constructor := func(*ServiceContext) (common.Service, error) {
 		running = false
 
 		return &InstrumentedService{
@@ -285,7 +289,7 @@ func TestServiceRestarts(t *testing.T) {
 // Tests that if a service fails to initialize itself, none of the other services
 // will be allowed to even start.
 func TestServiceConstructionAbortion(t *testing.T) {
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -298,7 +302,7 @@ func TestServiceConstructionAbortion(t *testing.T) {
 	started := make(map[string]bool)
 	for id, maker := range services {
 		id := id // Closure for the constructor
-		constructor := func(*ServiceContext) (Service, error) {
+		constructor := func(*ServiceContext) (common.Service, error) {
 			return &InstrumentedService{
 				startHook: func() { started[id] = true },
 			}, nil
@@ -309,7 +313,7 @@ func TestServiceConstructionAbortion(t *testing.T) {
 	}
 	// Register a service that fails to construct itself
 	failure := errors.New("fail")
-	failer := func(*ServiceContext) (Service, error) {
+	failer := func(*ServiceContext) (common.Service, error) {
 		return nil, failure
 	}
 
@@ -333,7 +337,7 @@ func TestServiceConstructionAbortion(t *testing.T) {
 // Tests that if a service fails to start, all others started before it will be
 // shut down.
 func TestServiceStartupAbortion(t *testing.T) {
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -348,7 +352,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 
 	for id, maker := range services {
 		id := id // Closure for the constructor
-		constructor := func(*ServiceContext) (Service, error) {
+		constructor := func(*ServiceContext) (common.Service, error) {
 			return &InstrumentedService{
 				startHook: func() { started[id] = true },
 				stopHook:  func() { stopped[id] = true },
@@ -360,7 +364,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 	}
 	// Register a service that fails to start
 	failure := errors.New("fail")
-	failer := func(*ServiceContext) (Service, error) {
+	failer := func(*ServiceContext) (common.Service, error) {
 		return &InstrumentedService{
 			start: failure,
 		}, nil
@@ -387,7 +391,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 // Tests that even if a registered service fails to shut down cleanly, it does
 // not influece the rest of the shutdown invocations.
 func TestServiceTerminationGuarantee(t *testing.T) {
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -402,7 +406,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 
 	for id, maker := range services {
 		id := id // Closure for the constructor
-		constructor := func(*ServiceContext) (Service, error) {
+		constructor := func(*ServiceContext) (common.Service, error) {
 			return &InstrumentedService{
 				startHook: func() { started[id] = true },
 				stopHook:  func() { stopped[id] = true },
@@ -414,7 +418,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 	}
 	// Register a service that fails to shot down cleanly
 	failure := errors.New("fail")
-	failer := func(*ServiceContext) (Service, error) {
+	failer := func(*ServiceContext) (common.Service, error) {
 		return &InstrumentedService{
 			stop: failure,
 		}, nil
@@ -462,7 +466,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 // TestServiceRetrieval tests that individual services can be retrieved.
 func TestServiceRetrieval(t *testing.T) {
 	// Create a simple stack and register two service types
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -497,7 +501,7 @@ func TestServiceRetrieval(t *testing.T) {
 
 // Tests that all APIs defined by individual services get exposed.
 func TestAPIGather(t *testing.T) {
-	stack, err := NewNode(DefaultConfig)
+	stack, err := NewNode(conf.DefaultConfig)
 	if err != nil {
 		t.Fatalf("failed to create protocol stack: %v", err)
 	}
@@ -526,7 +530,7 @@ func TestAPIGather(t *testing.T) {
 
 	for id, config := range services {
 		config := config
-		constructor := func(*ServiceContext) (Service, error) {
+		constructor := func(*ServiceContext) (common.Service, error) {
 			return &InstrumentedService{apis: config.APIs}, nil
 		}
 		if err := stack.Register(config.Maker(constructor)); err != nil {

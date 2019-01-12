@@ -17,28 +17,17 @@
 package common
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
-// MakeName creates a node name that follows the ethereum convention
-// for such names. It adds the operation system name and Go runtime version
-// the name.
-func MakeName(name, version string) string {
-	return fmt.Sprintf("%s/v%s/%s/%s", name, version, runtime.GOOS, runtime.Version())
-}
-
 // FileExist checks if a file exists at filePath.
 func FileExist(filePath string) bool {
-	_, err := os.Stat(filePath)
-	if err != nil && os.IsNotExist(err) {
+	if _, err := os.Stat(filePath); err != nil && os.IsNotExist(err) {
 		return false
 	}
-
 	return true
 }
 
@@ -49,7 +38,6 @@ func AbsolutePath(datadir string, filename string) string {
 	}
 	return filepath.Join(datadir, filename)
 }
-
 
 func WriteFile(file string, content []byte) error {
 	// Create the wallet directory with appropriate permissions
@@ -88,7 +76,7 @@ func GetFileList(root, expZipFile string, isExtName bool) ([]string, error) {
 		if file.IsDir() {
 			continue
 		}
-		// file name: Pxxxx.pa
+		// file name: xxxx.txt
 		if isExtName {
 			fileTemp := strings.Split(file.Name(), ".")
 			if fileTemp[len(fileTemp)-1] == expZipFile {
@@ -112,6 +100,17 @@ func ReadFile(file string) ([]byte, error) {
 	return jBytes, nil
 }
 
+func RemoveFile(file string) error {
+	if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+		return err
+	} else {
+		if err := os.Remove(file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func GetRandFilePath() string {
 	dir, err := ioutil.TempDir("", "temp")
 	if err != nil {
@@ -119,5 +118,3 @@ func GetRandFilePath() string {
 	}
 	return dir
 }
-
-
