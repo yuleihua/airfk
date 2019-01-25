@@ -6,9 +6,14 @@ import (
 	"time"
 )
 
+const (
+	DefaultPrefixService = "airman"
+)
+
 type Service struct {
 	Name    string        `json:"name"`
 	Version string        `json:"version"`
+	Check   string        `json:"check"`
 	TTL     time.Duration `json:"ttl"`
 	Tags    []string      `json:"tags"`
 	Nodes   []*Node       `json:"nodes"`
@@ -31,7 +36,7 @@ func NewService(name, version, address string, port int) *Service {
 		hostPort = 8500
 	}
 	node := &Node{
-		Id:   fmt.Sprintf("%s:%s:%d", name, hostIP, hostPort),
+		Id:   fmt.Sprintf("/%s/%s%s/%s/%d", DefaultPrefixService, name, version, hostIP, hostPort),
 		Host: hostIP,
 		Port: hostPort,
 	}
@@ -76,6 +81,15 @@ func tagsVersion(tags []string) string {
 func tagsHost(tags []string) string {
 	for i := 0; i < len(tags); i++ {
 		if strings.HasPrefix(tags[i], "h-") {
+			return string([]byte(tags[i])[2:])
+		}
+	}
+	return ""
+}
+
+func tagsCheck(tags []string, input string) string {
+	for i := 0; i < len(tags); i++ {
+		if strings.Compare(tags[i], input) == 0 {
 			return string([]byte(tags[i])[2:])
 		}
 	}

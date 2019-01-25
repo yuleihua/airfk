@@ -50,9 +50,9 @@ func configure(c *ConsulRegistry, address string, timeout time.Duration) error {
 	}
 
 	// set timeout
-	if timeout > 0 {
-		config.HttpClient.Timeout = timeout
-	}
+	//if timeout > 0 {
+	//	config.HttpClient.Timeout = timeout
+	//}
 
 	// create the client
 	client, err := consul.NewClient(config)
@@ -71,13 +71,13 @@ func getDeregisterTTL(t time.Duration) time.Duration {
 	deregTTL := t + DefaultInterval
 
 	// consul has a minimum timeout on deregistration of 1 minute.
-	if t < time.Minute {
-		deregTTL = time.Minute + DefaultInterval
+	if t < 2*time.Minute {
+		deregTTL = 2 * time.Minute
 	}
 	return deregTTL
 }
 
-func (c *ConsulRegistry) Register(s *Service, timeTTL time.Duration) error {
+func (c *ConsulRegistry) RegisterWithTTL(s *Service, timeTTL time.Duration) error {
 	if len(s.Nodes) == 0 {
 		return errors.New("require at least one node")
 	}
@@ -92,6 +92,8 @@ func (c *ConsulRegistry) Register(s *Service, timeTTL time.Duration) error {
 
 	deregTTL := getDeregisterTTL(timeTTL)
 	check := &consul.AgentServiceCheck{
+		Name:                           s.Name,
+		Notes:                          node.Id,
 		TTL:                            fmt.Sprintf("%v", timeTTL),
 		DeregisterCriticalServiceAfter: fmt.Sprintf("%v", deregTTL),
 	}
@@ -100,7 +102,7 @@ func (c *ConsulRegistry) Register(s *Service, timeTTL time.Duration) error {
 	asr := &consul.AgentServiceRegistration{
 		ID:      node.Id,
 		Name:    s.Name,
-		Tags:    s.Tags,
+		Tags:    s.GetTags(),
 		Port:    node.Port,
 		Address: node.Host,
 		Check:   check,
@@ -122,6 +124,50 @@ func (c *ConsulRegistry) Register(s *Service, timeTTL time.Duration) error {
 		return nil
 	}
 	return c.client.Agent().PassTTL("service:"+node.Id, "")
+}
+
+// default is 30s.
+func (c *ConsulRegistry) Register(s *Service) error {
+	if len(s.Nodes) == 0 {
+		return errors.New("require at least one node")
+	}
+
+	// use first node
+	node := s.Nodes[0]
+
+	// full re-register
+	if err := c.client.Agent().PassTTL("service:"+node.Id, ""); err == nil {
+		return nil
+	}
+
+	unregTTL := getDeregisterTTL(0)
+	healthCheck := fmt.Sprintf("http://%v:%v/%v", node.Host, node.Port, s.Check)
+	if s.Check == "" {
+		healthCheck = fmt.Sprintf("http://%v:%v", node.Host, node.Port)
+	}
+	check := &consul.AgentServiceCheck{
+		Name:                           s.Name,
+		Notes:                          node.Id,
+		Interval:                       "10s",
+		HTTP:                           healthCheck,
+		Timeout:                        "30s",
+		DeregisterCriticalServiceAfter: fmt.Sprintf("%v", unregTTL),
+	}
+
+	// register the service
+	asr := &consul.AgentServiceRegistration{
+		ID:      node.Id,
+		Name:    s.Name,
+		Tags:    s.GetTags(),
+		Port:    node.Port,
+		Address: node.Host,
+		Check:   check,
+	}
+
+	if err := c.client.Agent().ServiceRegister(asr); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *ConsulRegistry) Deregister(s *Service) error {
@@ -165,7 +211,7 @@ func (c *ConsulRegistry) GetService(name, tag string) ([]*Service, error) {
 			address = s.Node.Address
 		}
 
-		key := tag
+		key := tagsCheck(s.Service.Tags, tag)
 		if tag == "" {
 			key = version
 		}

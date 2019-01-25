@@ -1,5 +1,0 @@
-package common
-
-const (
-// length
-)

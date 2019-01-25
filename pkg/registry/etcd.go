@@ -3,11 +3,13 @@ package registry
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -44,7 +46,43 @@ func NewEtcdRegistry(tmDail, tmReq time.Duration, endPoints []string) *EtcdRegis
 	}
 }
 
-func (c *EtcdRegistry) Register(s *Service, timeTTL time.Duration) error {
+func (c *EtcdRegistry) RegisterWithTTL(s *Service, timeTTL time.Duration) error {
+	if len(s.Nodes) == 0 {
+		return errors.New("require at least one node")
+	}
+
+	// use first node
+	node := s.Nodes[0]
+	val := strings.Join(s.GetTags(), ",")
+	ctx, cancel := context.WithTimeout(context.Background(), c.reqTimeout)
+	defer cancel()
+
+	// ttl-second
+	resp, _ := c.client.Grant(ctx, timeTTL.Nanoseconds())
+
+	// get and put
+	_, err := c.client.Get(ctx, node.Id)
+	if err != nil {
+		if err == rpctypes.ErrKeyNotFound {
+			if _, err := c.client.Put(ctx, node.Id, val, clientv3.WithLease(resp.ID)); err != nil {
+				log.Errorf("set service %s etcd3 failed: %v", node.Id, err)
+				return err
+			}
+		} else {
+			log.Infof("get failed: Id:%s, error: %v", node.Id, err)
+			return err
+		}
+	} else {
+		// refresh
+		if _, err := c.client.Put(ctx, node.Id, val, clientv3.WithLease(resp.ID)); err != nil {
+			log.Errorf("refresh service %s failed: %v", node.Id, err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *EtcdRegistry) Register(s *Service) error {
 	if len(s.Nodes) == 0 {
 		return errors.New("require at least one node")
 	}
@@ -85,7 +123,8 @@ func (c *EtcdRegistry) GetService(name, tag string) ([]*Service, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.reqTimeout)
 	defer cancel()
 
-	resp, err := c.client.Get(ctx, name, clientv3.WithPrefix())
+	key := fmt.Sprintf("/%s/%s", DefaultPrefixService, name)
+	resp, err := c.client.Get(ctx, key, clientv3.WithPrefix())
 	if err != nil || resp == nil {
 		log.Errorf("etcd GetWithPrefix error:%v", err)
 		return nil, err
@@ -97,19 +136,22 @@ func (c *EtcdRegistry) GetService(name, tag string) ([]*Service, error) {
 		log.Infof("ev %d: %#v \n", i, ev)
 
 		tags := strings.Split(string(ev.Value), ",")
-		keys := strings.Split(string(ev.Key), ":")
-		if keys[0] != name {
+		keys := strings.Split(string(ev.Key), "/")
+
+		fmt.Println("keys :", keys)
+		fmt.Println("tags :", tags)
+		if len(keys) < 4 || keys[2] != name {
 			continue
 		}
 
 		version := tagsVersion(tags)
-		address := keys[1]
+		address := keys[3]
 		// use node address
 		if len(address) == 0 {
 			address = tagsHost(tags)
 		}
 
-		key := tag
+		key := tagsCheck(tags, tag)
 		if tag == "" {
 			key = version
 		}
@@ -123,10 +165,7 @@ func (c *EtcdRegistry) GetService(name, tag string) ([]*Service, error) {
 			serviceMap[key] = svc
 		}
 
-		var port int
-		if len(keys) > 2 {
-			port, _ = strconv.Atoi(keys[2])
-		}
+		port, _ := strconv.Atoi(keys[4])
 		svc.Nodes = append(svc.Nodes, &Node{
 			Id:   string(ev.Key),
 			Host: address,
@@ -146,7 +185,8 @@ func (c *EtcdRegistry) ListServices() ([]*Service, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.reqTimeout)
 	defer cancel()
 
-	resp, err := c.client.Get(ctx, "/", clientv3.WithPrefix())
+	key := fmt.Sprintf("/%s", DefaultPrefixService)
+	resp, err := c.client.Get(ctx, key, clientv3.WithPrefix())
 	if err != nil || resp == nil {
 		log.Errorf("etcd GetWithPrefix error:%v", err)
 		return nil, err
@@ -154,8 +194,11 @@ func (c *EtcdRegistry) ListServices() ([]*Service, error) {
 
 	services := make([]*Service, 0, len(resp.Kvs))
 	for _, ev := range resp.Kvs {
-		keys := strings.Split(string(ev.Key), ":")
-		services = append(services, &Service{Name: keys[0], Version: keys[1]})
+		keys := strings.Split(string(ev.Key), "/")
+		fmt.Println("keysdsddd: ", keys)
+		if len(keys) > 3 {
+			services = append(services, &Service{Name: keys[2]})
+		}
 	}
 	return services, nil
 }

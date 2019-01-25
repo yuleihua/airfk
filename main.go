@@ -2,6 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,10 +15,23 @@ import (
 	"airman.com/airfk/node/conf"
 )
 
-var confname string
+var (
+	confname string
+	isPProf  bool
+)
 
 func init() {
 	flag.StringVar(&confname, "c", "conf/node.ini", "configure file")
+	flag.BoolVar(&isPProf, "p", false, "setting of pprof")
+}
+
+func StartPProf(address string) {
+	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
+	go func() {
+		if err := http.ListenAndServe(address, nil); err != nil {
+			log.Error("Failure in running pprof server", "err", err)
+		}
+	}()
 }
 
 func main() {
@@ -48,6 +64,10 @@ func main() {
 	}
 
 	log.Info(">> step2: node is running now")
+
+	if isPProf {
+		StartPProf("localhost:6060")
+	}
 
 	<-c
 

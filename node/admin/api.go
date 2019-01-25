@@ -106,3 +106,8 @@ func (api *PublicAdminAPI) DataDir() string {
 func (api *PublicAdminAPI) Version() string {
 	return fmt.Sprintf("%s %s", api.n.Name(), api.n.Version())
 }
+
+// Ping retrieves the current data directory the node is using.
+func (api *PublicAdminAPI) Ping() string {
+	return "pong"
+}
