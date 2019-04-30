@@ -1,0 +1,13 @@
+{
+    "name":"{{.Name}}",
+    "node_id":"1",
+    "data_dir":"/tmp/task",
+    "http_host":"127.0.0.1",
+    "http_port":5050,
+    "http_origins":null,
+    "http_modules":null,
+    "ws_host":"127.0.0.1",
+    "ws_port":5051,
+    "ws_origins":null,
+    "ws_modules":null
+}
