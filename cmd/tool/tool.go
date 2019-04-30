@@ -18,16 +18,20 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"airman.com/airfk/pkg/types"
 	"airman.com/airms/zoo"
 )
 
 const (
 	libNameDefault = "airman.com/airfk" // pkg base
+	version        = "1.0.1"
 )
 
+// nodeFileList node files.
 var nodeFileList = map[string][]string{
 	"admin":     {"api.go", "backend.go", "node.go"},
 	"conf":      {"conf.go"},
@@ -37,11 +41,13 @@ var nodeFileList = map[string][]string{
 	"@@@@@":     {"@@@@@.go", "manager.go"},
 }
 
+// distFileList dist files.
 var distFileList = map[string][]string{
 	"etc": {"@@@@@.json"},
 	"bin": {""},
 }
 
+// gitList git files. if it is not existed, git clone it.
 var gitList = []string{
 	"airman.com/airfk",
 }
@@ -90,22 +96,30 @@ func NewProject(website, name string) *zoo.Project {
 	}
 }
 
+// templatePath
 var templatePath = filepath.Join(zoo.ProjectPath("airman.com", "airfk"), "template")
 
 var (
 	webName     string
 	projectName string
 	template    string
+	isVersion   bool
 )
 
 func init() {
 	flag.StringVar(&webName, "w", "airman.com", "website name")
 	flag.StringVar(&projectName, "p", "website", "project name")
 	flag.StringVar(&template, "t", templatePath, "template path")
+	flag.BoolVar(&isVersion, "v", false, "version information")
 }
 
 func main() {
 	flag.Parse()
+
+	if isVersion {
+		fmt.Println(types.NewVersion(version).String())
+		os.Exit(0)
+	}
 
 	fmt.Printf("project information: %s %s\n", webName, projectName)
 
