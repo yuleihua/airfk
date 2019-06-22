@@ -386,6 +386,11 @@ func (n *Node) Name() string {
 	return n.conf.Name
 }
 
+// NodeID return the node id.
+func (n *Node) NodeID() string {
+	return n.conf.Id
+}
+
 // conf.Config return application configs.
 func (n *Node) Config() interface{} {
 	return n.conf
