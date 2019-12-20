@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/fatih/set.v0"
+	set "github.com/deckarep/golang-set"
 
 	cc "airman.com/airfk/pkg/codec"
 	ts "airman.com/airfk/pkg/types"
@@ -90,14 +90,14 @@ type Server struct {
 
 	Run      int32
 	CodecsMu sync.Mutex
-	Codecs   *set.Set
+	Codecs   set.Set
 }
 
 // NewServer will create a new server instance with no registered handlers.
 func NewServer() *Server {
 	server := &Server{
 		Services: make(ServiceRegistry),
-		Codecs:   set.New(),
+		Codecs:   set.NewSet(),
 		Run:      1,
 	}
 

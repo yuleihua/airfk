@@ -47,7 +47,7 @@ import (
 	cmn "{{ .RelDir }}/node/common"
 )
 
-// Type determines the kind of filter and is used to put the filter in to
+// Type determines the kind of event and is used to put the event in to
 // the correct bucket when added.
 type Type byte
 
@@ -61,11 +61,7 @@ const (
 )
 
 const (
-
-	// txChanSize is the size of channel listening to NewTxsEvent.
-	// The number is referenced from the size of tx pool.
-	txChanSize = 4096
-	// chainEvChanSize is the size of channel listening to ChainEvent.
+	// resultEvChanSize is the size of channel listening to resultEvChan.
 	resultEvChanSize = 10
 )
 
@@ -102,8 +98,8 @@ type EventMsg struct {
 type eventIndex map[Type]map[server.ID]*subscription
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
-// parses and filters them. It uses the all map to retrieve filter changes. The
-// work loop holds its own index that is used to forward events to filters.
+// parses and filters them. It uses the all map to retrieve event changes. The
+// work loop holds its own index that is used to forward events.
 //
 // The returned manager has a loop that needs to be stopped with the Stop function
 // or by stopping the given mux.
@@ -189,7 +185,7 @@ func (es *EventMsg) SubscribeResultTask(results chan []cmn.Result) *Subscription
 	return es.subscribe(sub)
 }
 
-// broadcast event to filters that match criteria.
+// broadcast event that match criteria.
 func (es *EventMsg) broadcast(ev interface{}) {
 	if ev == nil {
 		return
@@ -207,7 +203,7 @@ func (es *EventMsg) broadcast(ev interface{}) {
 	}
 }
 
-// eventLoop (un)installs filters and processes mux events.
+// eventLoop (un)installs events and processes mux events.
 func (es *EventMsg) eventLoop(ctx context.Context) {
 	for {
 		select {

@@ -25,7 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
-	"gopkg.in/fatih/set.v0"
+	set "github.com/deckarep/golang-set"
 
 	cc "airman.com/airfk/pkg/codec"
 )
@@ -70,8 +70,6 @@ func (srv *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 }
 
 // NewWSServer creates a new websocket RPC server around an API provider.
-//
-// Deprecated: use Server.WebsocketHandler
 func NewWSServer(allowedOrigins []string, srv *Server) *http.Server {
 	return &http.Server{Handler: srv.WebsocketHandler(allowedOrigins)}
 }
@@ -80,7 +78,7 @@ func NewWSServer(allowedOrigins []string, srv *Server) *http.Server {
 // websocket upgrade process. When a '*' is specified as an allowed origins all
 // connections are accepted.
 func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http.Request) error {
-	origins := set.New()
+	origins := set.NewSet()
 	allowAllOrigins := false
 
 	for _, origin := range allowedOrigins {
@@ -93,18 +91,18 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 	}
 
 	// allow localhost if no allowedOrigins are specified.
-	if len(origins.List()) == 0 {
+	if origins.Cardinality() == 0 {
 		origins.Add("http://localhost")
 		if hostname, err := os.Hostname(); err == nil {
 			origins.Add("http://" + strings.ToLower(hostname))
 		}
 	}
 
-	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v\n", origins.List()))
+	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v\n", origins.ToSlice()))
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
 		origin := strings.ToLower(req.Header.Get("Origin"))
-		if allowAllOrigins || origins.Has(origin) {
+		if allowAllOrigins || origins.Contains(origin) {
 			return nil
 		}
 		log.Warn(fmt.Sprintf("origin '%s' not allowed on WS-RPC interface\n", origin))

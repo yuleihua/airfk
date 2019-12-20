@@ -89,7 +89,7 @@ type Node struct {
 	stop chan struct{} // Channel to wait for termination notifications
 }
 
-// New creates a new P2P node, ready for protocol registration.
+// New creates a new node.
 func NewNode(config *conf.Config) (*Node, error) {
 	confCopy := *config
 	config = &confCopy
@@ -134,7 +134,7 @@ func (n *Node) Register(constructor service.ServiceConstructor) error {
 	return nil
 }
 
-// Start create a live P2P node and starts running it.
+// Start starts running node.
 func (n *Node) Start() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -143,7 +143,6 @@ func (n *Node) Start() error {
 		return ErrNodeRunning
 	}
 
-	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]service.Service)
 	for _, constructor := range n.serviceFuncs {
 		// Create a new context for the particular ts.cmn.Service

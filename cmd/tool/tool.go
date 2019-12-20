@@ -19,11 +19,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"airman.com/airfk/pkg/types"
-	"airman.com/airms/zoo"
+	"airman.com/airfk/pkg/zoo"
 )
 
 const (
@@ -133,6 +134,15 @@ func main() {
 		fmt.Println(err)
 	}
 	fmt.Printf(">>create %s step2: pkg %v is ok\n", projectName, gitList)
-	fmt.Println("Now you can build your project! ")
 
+	dir := fmt.Sprintf("cd %s", project.ProjectDir)
+	modCmd := dir + "; go mod init ; go mod edit -require=airman.com/airfk@v0.0.0 ; go mod edit -replace=airman.com/airfk@v0.0.0=$GOPATH/src/airman.com/airfk ; go mod tidy && make"
+	cmd := exec.Command("/bin/sh", "-c", modCmd)
+	result, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("exec mod cmd error, %s:%v", modCmd, err)
+		os.Exit(1)
+	}
+	fmt.Println(string(result))
+	fmt.Println("Now get your project! ")
 }

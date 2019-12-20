@@ -71,7 +71,11 @@ func ExecCmdFileWithTimeout(cmd string, retry, timeout int) ([]byte, error) {
 
 func execCmdline(c string) ([]byte, error) {
 	cmd := exec.Command("/bin/sh", "-c", c)
-	return cmd.CombinedOutput()
+	result, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func execCmdlineWithTimeout(c string, timeout int) ([]byte, error) {

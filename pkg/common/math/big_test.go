@@ -17,12 +17,12 @@
 package math
 
 import (
+	"airman.com/airfk/pkg/common"
 	"bytes"
 	"encoding/hex"
 	"math/big"
 	"testing"
 
-	"github.com/pentaglobal/penta-dlos/common"
 )
 
 func TestHexOrDecimal256(t *testing.T) {
